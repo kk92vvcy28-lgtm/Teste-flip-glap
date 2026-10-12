@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bilheteira Leões</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0d0c;
+    --frame: #161a18;
+    --frame-edge: #262c29;
+    --flap: #1d1f1e;
+    --flap-hi: #262928;
+    --flap-text: #f1efe6;
+    --muted: #8c948f;
+    --label: #e8b84a;
+    --green: #00a35c;
+    --green-deep: #006b3c;
+    --amber: #f5b733;
+    --red: #ff5a4f;
+    --grey: #7d8580;
+    --cell: 22px;
+    --gap: .5;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background:
+      radial-gradient(1200px 600px at 50% -200px, #12301f 0%, transparent 70%),
+      var(--bg);
+    color: var(--flap-text);
+    font-family: Inter, system-ui, sans-serif;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 28px 16px 48px; }
+
+  /* ---------- Cabeçalho ---------- */
+  header.top {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .stripes {
+    width: 44px; height: 44px; border-radius: 10px; overflow: hidden; flex: none;
+    background: repeating-linear-gradient(180deg, var(--green-deep) 0 8px, #fff 8px 14px);
+    box-shadow: 0 0 0 2px #0e3a24, 0 6px 18px rgba(0,163,92,.25);
+  }
+  .brand h1 { margin: 0; font-size: 20px; letter-spacing: .04em; font-weight: 800; }
+  .brand p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .controls { display: flex; align-items: center; gap: 10px; }
+  .chip {
+    font: 600 12px Inter, sans-serif; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted); background: var(--frame); border: 1px solid var(--frame-edge);
+    padding: 8px 12px; border-radius: 999px; cursor: pointer;
+  }
+  .chip[aria-pressed="true"] { color: var(--flap-text); border-color: var(--green); }
+
+  /* ---------- Quadro ---------- */
+  .board {
+    background: linear-gradient(#141716, #0f1110);
+    border: 1px solid var(--frame-edge);
+    border-radius: 14px;
+    padding: 18px 18px 14px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 30px 60px rgba(0,0,0,.5);
+    position: relative;
+  }
+  .board::before, .board::after {           /* parafusos */
+    content: ""; position: absolute; top: 8px; width: 6px; height: 6px; border-radius: 50%;
+    background: #303633; box-shadow: inset 0 1px 1px rgba(0,0,0,.6);
+  }
+  .board::before { left: 8px; } .board::after { right: 8px; }
+
+  .board-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin-bottom: 14px; flex-wrap: wrap;
+  }
+  .board-title { display: flex; align-items: center; gap: 12px; }
+  .board-title .icon {
+    width: calc(var(--cell) * 1.45); height: calc(var(--cell) * 1.45);
+    background: var(--green); border-radius: 4px; display: grid; place-items: center;
+    font: 800 calc(var(--cell) * .8) Inter, sans-serif; color: #fff;
+  }
+
+  .colheads, .row {
+    display: grid; gap: calc(var(--cell) * var(--gap));
+    grid-template-columns: var(--cols);
+    align-items: center;
+  }
+  .colheads {
+    color: var(--label);
+    font: 700 11px Inter, sans-serif; letter-spacing: .14em; text-transform: uppercase;
+    padding: 0 6px 8px; border-bottom: 1px solid var(--frame-edge); margin-bottom: 6px;
+  }
+  .colheads .r, .row .r { justify-self: end; }
+
+  .rows { display: flex; flex-direction: column; }
+  .row {
+    padding: 6px; border-radius: 6px; cursor: pointer;
+    background: none; border: 0; color: inherit; text-align: left; width: 100%;
+    font: inherit; position: relative;
+  }
+  .row:nth-child(odd) { background: rgba(255,255,255,.015); }
+  .row:hover, .row:focus-visible { background: rgba(0,163,92,.10); outline: none; }
+  .row:focus-visible { box-shadow: inset 0 0 0 2px var(--green); }
+  .row.selected { background: rgba(0,163,92,.16); }
+  .row.disabled { cursor: default; }
+  .row.disabled:hover { background: rgba(255,255,255,.015); }
+
+  .group { display: flex; gap: 2px; }
+
+  /* ---------- Célula flip-flap ---------- */
+  .cell {
+    --h: calc(var(--cell) * 1.42);
+    position: relative; width: var(--cell); height: var(--h);
+    perspective: calc(var(--cell) * 12);
+    font: 800 calc(var(--cell) * .82) "JetBrains Mono", ui-monospace, monospace;
+    color: var(--flap-text);
+    flex: none;
+    contain: layout style;
+  }
+  .cell .half {
+    position: absolute; left: 0; right: 0; height: 50%; overflow: hidden;
+    background: var(--flap);
+    backface-visibility: hidden;
+  }
+  .cell .half.t { top: 0; border-radius: 3px 3px 0 0;
+    background: linear-gradient(var(--flap-hi), var(--flap)); }
+  .cell .half.b { bottom: 0; border-radius: 0 0 3px 3px;
+    background: linear-gradient(#1a1c1b, #151716); }
+  .cell .half span {
+    position: absolute; left: 0; right: 0; height: var(--h);
+    line-height: var(--h); text-align: center;
+  }
+  .cell .half.t span { top: 0; }
+  .cell .half.b span { bottom: 0; }
+  .cell .leaf-t { transform-origin: 50% 100%; z-index: 2; will-change: transform; }
+  .cell .leaf-b { transform-origin: 50% 0;   z-index: 2; transform: rotateX(90deg); }
+  .cell::after {                       /* a linha de dobra */
+    content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px;
+    background: #050605; z-index: 3; transform: translateY(-.5px);
+  }
+  .cell::before {                      /* os pinos laterais */
+    content: ""; position: absolute; left: -1px; right: -1px; top: calc(50% - 2px); height: 4px;
+    background: linear-gradient(90deg, #3a403d 0 2px, transparent 2px calc(100% - 2px), #3a403d calc(100% - 2px));
+    z-index: 4;
+  }
+
+  .c-green  .cell { color: var(--green); }
+  .c-amber  .cell { color: var(--amber); }
+  .c-red    .cell { color: var(--red); }
+  .c-grey   .cell { color: var(--grey); }
+  .c-label  .cell { color: var(--label); }
+
+  .led {
+    width: 8px; height: 8px; border-radius: 50%; position: absolute; right: -2px; top: 50%;
+    transform: translateY(-50%); display: none;
+  }
+
+  .ticker { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--frame-edge);
+    display: flex; justify-content: center; }
+
+  .legend {
+    display: flex; gap: 18px; flex-wrap: wrap; margin-top: 14px;
+    color: var(--muted); font-size: 12px;
+  }
+  .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+
+  .hint { color: var(--muted); font-size: 13px; margin: 16px 2px 0; }
+
+  /* ---------- Painel de compra ---------- */
+  .scrim {
+    position: fixed; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(2px);
+    opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 20;
+  }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .panel {
+    position: fixed; top: 0; right: 0; height: 100%; width: min(440px, 100%);
+    background: #121514; border-left: 1px solid var(--frame-edge);
+    transform: translateX(100%); transition: transform .3s cubic-bezier(.2,.8,.2,1);
+    z-index: 21; overflow-y: auto; padding: 22px 20px 28px;
+  }
+  .panel.open { transform: none; }
+  .panel .close {
+    position: absolute; top: 14px; right: 14px; width: 34px; height: 34px; border-radius: 50%;
+    background: var(--frame); border: 1px solid var(--frame-edge); color: var(--flap-text);
+    font-size: 18px; cursor: pointer;
+  }
+  .eyebrow { color: var(--label); font: 700 11px Inter, sans-serif; letter-spacing: .14em; text-transform: uppercase; }
+  .panel h2 { margin: 6px 40px 4px 0; font-size: 22px; line-height: 1.2; }
+  .meta { color: var(--muted); font-size: 14px; line-height: 1.6; margin-bottom: 18px; }
+  .section-title { font: 700 12px Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 18px 0 8px; }
+
+  .sectors { display: grid; gap: 8px; }
+  .sector {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: var(--frame); border: 1px solid var(--frame-edge); border-radius: 10px;
+    padding: 12px 14px; cursor: pointer;
+  }
+  .sector input { accent-color: var(--green); margin-right: 10px; }
+  .sector:has(input:checked) { border-color: var(--green); background: #10261b; }
+  .sector small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .sector .price { font: 800 16px "JetBrains Mono", monospace; }
+  .sector.soldout { opacity: .45; cursor: not-allowed; }
+
+  .qty { display: flex; align-items: center; gap: 12px; }
+  .qty button {
+    width: 38px; height: 38px; border-radius: 10px; font-size: 20px; cursor: pointer;
+    background: var(--frame); border: 1px solid var(--frame-edge); color: var(--flap-text);
+  }
+  .qty output { font: 800 20px "JetBrains Mono", monospace; min-width: 2ch; text-align: center; }
+
+  .socio { display: flex; align-items: center; gap: 10px; font-size: 14px; margin-top: 14px; cursor: pointer; }
+  .socio input { accent-color: var(--green); width: 18px; height: 18px; }
+
+  .total {
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-top: 1px dashed var(--frame-edge); margin-top: 20px; padding-top: 16px;
+  }
+  .total strong { font: 800 28px "JetBrains Mono", monospace; }
+  .buy {
+    width: 100%; margin-top: 16px; padding: 15px; border-radius: 12px; border: 0; cursor: pointer;
+    background: var(--green); color: #fff; font: 800 15px Inter, sans-serif; letter-spacing: .06em; text-transform: uppercase;
+  }
+  .buy:hover { background: #00b867; }
+  .buy:disabled { background: #2a302d; color: var(--muted); cursor: not-allowed; }
+
+  /* bilhete emitido */
+  .ticket {
+    margin-top: 6px; border-radius: 14px; overflow: hidden;
+    background: #f4f1e6; color: #111; position: relative;
+  }
+  .ticket .tband { background: var(--green-deep); color: #fff; padding: 14px 16px;
+    display: flex; justify-content: space-between; font: 700 12px Inter, sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+  .ticket .tbody { padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+  .ticket .tbody div small { display: block; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #6b6b62; }
+  .ticket .tbody div b { font-size: 15px; }
+  .ticket .tbody .wide { grid-column: 1 / -1; }
+  .ticket .tear { border-top: 2px dashed #c9c4b2; margin: 0 12px; }
+  .ticket .tcode { padding: 14px 16px 18px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .ticket .tcode .group { --cell: 22px; }
+  .ticket .barcode { height: 40px; width: 100%;
+    background: repeating-linear-gradient(90deg, #111 0 2px, transparent 2px 4px, #111 4px 5px, transparent 5px 8px, #111 8px 11px, transparent 11px 12px); }
+  .again { background: none; border: 1px solid var(--frame-edge); color: var(--flap-text); }
+  .again:hover { background: var(--frame); }
+
+  footer { color: #59605c; font-size: 12px; margin-top: 28px; text-align: center; }
+
+  @media (max-width: 759px) {
+    :root { --gap: .7; }
+    .wrap { padding: 20px 12px 40px; }
+    .board { padding: 14px 8px 10px; }
+    .row { padding: 4px; }
+    .colheads { padding: 0 4px 8px; }
+    .group { gap: 1px; }
+    .cell::before { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .panel, .scrim { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="stripes" aria-hidden="true"></div>
+      <div>
+        <h1>BILHETEIRA · SPORTING CP</h1>
+        <p>Liga Portugal 2026/27 · Próximos jogos</p>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="chip" id="soundBtn" aria-pressed="false" title="Som das palhetas">♪ Som</button>
+    </div>
+  </header>
+
+  <section class="board" aria-label="Quadro de jogos">
+    <div class="board-head">
+      <div class="board-title">
+        <div class="icon" aria-hidden="true">⚽</div>
+        <div id="titleFlap" class="group c-label" aria-hidden="true"></div>
+      </div>
+      <div id="clockFlap" class="group" aria-label="Hora atual"></div>
+    </div>
+
+    <div class="colheads" id="colheads"></div>
+    <div class="rows" id="rows" role="list"></div>
+
+    <div class="ticker"><div id="tickerFlap" class="group c-label" aria-live="polite"></div></div>
+  </section>
+
+  <div class="legend">
+    <span><i style="background:var(--green)"></i>À venda</span>
+    <span><i style="background:var(--amber)"></i>Últimos lugares</span>
+    <span><i style="background:var(--red)"></i>Esgotado</span>
+    <span><i style="background:var(--grey)"></i>Venda em breve</span>
+  </div>
+  <p class="hint">Toque num jogo para escolher a bancada e comprar bilhetes. O quadro atualiza a disponibilidade em tempo real.</p>
+
+  <footer>Protótipo de interface · calendário, preços e disponibilidade ilustrativos · não é um serviço oficial de venda.</footer>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="panel" id="panel" aria-hidden="true" aria-labelledby="pTitle" role="dialog">
+  <button class="close" id="closeBtn" aria-label="Fechar">×</button>
+  <div id="panelBody"></div>
+</aside>
+
+<script>
+/* =========================================================
+   Dados — calendário ilustrativo da Liga Portugal 2026/27
+   ========================================================= */
+const ALVALADE = "Estádio José Alvalade, Lisboa";
+const GAMES = [
+  { j: 8,  date: "2026-10-17", time: "20:30", home: true,  opp: "VITORIA SC",  short: "VSC", oppName: "Vitória SC",      stadium: ALVALADE, base: 25, seats: 9400 },
+  { j: 9,  date: "2026-10-25", time: "18:00", home: false, opp: "FAMALICAO",   short: "FAM", oppName: "FC Famalicão",    stadium: "Estádio Municipal 22 de Junho, Famalicão", base: 20, seats: 1300 },
+  { j: 10, date: "2026-11-01", time: "20:30", home: true,  opp: "FC PORTO",    short: "FCP", oppName: "FC Porto",        stadium: ALVALADE, base: 45, seats: 0 },
+  { j: 11, date: "2026-11-08", time: "18:00", home: false, opp: "GIL VICENTE", short: "GIL", oppName: "Gil Vicente FC",  stadium: "Estádio Cidade de Barcelos", base: 20, seats: 640 },
+  { j: 12, date: "2026-11-29", time: "20:30", home: true,  opp: "SC BRAGA",    short: "SCB", oppName: "SC Braga",        stadium: ALVALADE, base: 30, seats: 6200 },
+  { j: 13, date: "2026-12-06", time: "15:30", home: false, opp: "ESTORIL",     short: "EST", oppName: "Estoril Praia",   stadium: "Estádio António Coimbra da Mota, Estoril", base: 20, seats: 2100 },
+  { j: 14, date: "2026-12-13", time: "20:30", home: true,  opp: "MOREIRENSE",  short: "MOR", oppName: "Moreirense FC",   stadium: ALVALADE, base: 20, seats: 15800 },
+  { j: 15, date: "2026-12-20", time: "18:00", home: false, opp: "BENFICA",     short: "SLB", oppName: "SL Benfica",      stadium: "Estádio da Luz, Lisboa", base: 40, seats: null, opensIn: 14000, opensWith: 2400 },
+  { j: 16, date: "2027-01-03", time: "20:30", home: true,  opp: "RIO AVE",     short: "RAV", oppName: "Rio Ave FC",      stadium: ALVALADE, base: 20, seats: null, opensIn: 26000, opensWith: 18000 },
+  { j: 17, date: "2027-01-10", time: "17:00", home: false, opp: "AROUCA",      short: "ARO", oppName: "FC Arouca",       stadium: "Estádio Municipal de Arouca", base: 15, seats: null },
+];
+const WEEKDAYS = ["DOM","SEG","TER","QUA","QUI","SEX","SAB"];
+const MONTHS   = ["JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ"];
+const MONTHS_LONG = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+const WEEKDAYS_LONG = ["domingo","segunda-feira","terça-feira","quarta-feira","quinta-feira","sexta-feira","sábado"];
+
+function statusOf(g) {
+  if (g.seats === null) return { key: "BREVE",    cls: "c-grey"  };
+  if (g.seats === 0)    return { key: "ESGOTADO", cls: "c-red"   };
+  if (g.seats < 1500)   return { key: "ULTIMOS",  cls: "c-amber" };
+  return                       { key: "A VENDA",  cls: "c-green" };
+}
+const parseDate = g => new Date(g.date + "T12:00:00");
+
+/* =========================================================
+   Som — estalido sintetizado (desligado por omissão)
+   ========================================================= */
+const Sound = {
+  on: false, ctx: null, pending: 0,
+  enable(v) {
+    this.on = v;
+    if (v && !this.ctx) {
+      try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch { this.on = false; }
+    }
+  },
+  tick() { if (this.on) this.pending++; },
+  frame() {
+    if (this.on && this.pending && this.ctx) {
+      const ctx = this.ctx, n = Math.min(this.pending, 40);
+      const buf = ctx.createBuffer(1, 400, ctx.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 6);
+      const src = ctx.createBufferSource(), gain = ctx.createGain(), f = ctx.createBiquadFilter();
+      f.type = "bandpass"; f.frequency.value = 2600 + Math.random() * 900; f.Q.value = 1.2;
+      gain.gain.value = Math.min(.05 + n * .012, .35);
+      src.buffer = buf; src.connect(f); f.connect(gain); gain.connect(ctx.destination); src.start();
+    }
+    this.pending = 0;
+    requestAnimationFrame(() => this.frame());
+  }
+};
+requestAnimationFrame(() => Sound.frame());
+
+/* =========================================================
+   Célula flip-flap
+   ========================================================= */
+const ALPHABET = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:-.€/%";
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+class FlapCell {
+  constructor(parent) {
+    this.el = document.createElement("div");
+    this.el.className = "cell";
+    this.el.innerHTML =
+      '<div class="half t"><span> </span></div>' +
+      '<div class="half b"><span> </span></div>' +
+      '<div class="half t leaf-t"><span> </span></div>' +
+      '<div class="half b leaf-b"><span> </span></div>';
+    const s = this.el.querySelectorAll("span");
+    [this.top, this.bottom, this.leafTop, this.leafBottom] = s;
+    this.cur = " "; this.target = " "; this.running = false;
+    parent.appendChild(this.el);
+  }
+  setAll(ch) { this.top.textContent = this.bottom.textContent = this.leafTop.textContent = this.leafBottom.textContent = ch; }
+  set(ch, delay = 0) {
+    ch = ALPHABET.includes(ch) ? ch : " ";
+    this.target = ch;
+    if (REDUCED) { this.cur = ch; this.setAll(ch); return; }
+    if (this.running || ch === this.cur) return;
+    this.running = true;
+    setTimeout(() => this.run(), delay);
+  }
+  async run() {
+    // Um quadro real percorre o alfabeto todo; limitamos a ~10 palhetas para assentar depressa
+    const dist = (ALPHABET.indexOf(this.target) - ALPHABET.indexOf(this.cur) + ALPHABET.length) % ALPHABET.length;
+    if (dist > 10) {
+      this.cur = ALPHABET[(ALPHABET.indexOf(this.target) - 10 + ALPHABET.length) % ALPHABET.length];
+      this.setAll(this.cur);
+    }
+    while (this.cur !== this.target) {
+      const next = ALPHABET[(ALPHABET.indexOf(this.cur) + 1) % ALPHABET.length];
+      await this.flip(next);
+    }
+    this.running = false;
+  }
+  flip(next) {
+    const T = 48 + Math.random() * 20;
+    this.top.textContent = next;
+    this.leafTop.textContent = this.cur;
+    this.bottom.textContent = this.cur;
+    this.leafBottom.textContent = next;
+    Sound.tick();
+    this.leafTop.parentNode.animate(
+      [{ transform: "rotateX(0)" }, { transform: "rotateX(-90deg)", offset: .5 }, { transform: "rotateX(-90deg)" }],
+      { duration: T, easing: "ease-in" });
+    const a = this.leafBottom.parentNode.animate(
+      [{ transform: "rotateX(90deg)" }, { transform: "rotateX(90deg)", offset: .5 }, { transform: "rotateX(0)" }],
+      { duration: T, easing: "ease-out" });
+    return a.finished.then(() => { this.cur = next; this.setAll(next); });
+  }
+}
+
+/* Um grupo = uma palavra de largura fixa */
+class FlapGroup {
+  constructor(parent, width, align = "left") {
+    this.el = parent;
+    this.width = width; this.align = align;
+    this.cells = Array.from({ length: width }, () => new FlapCell(parent));
+  }
+  set(text, stagger = 28) {
+    text = String(text).toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "").slice(0, this.width);
+    text = this.align === "right" ? text.padStart(this.width) : text.padEnd(this.width);
+    [...text].forEach((ch, i) => this.cells[i].set(ch, i * stagger + Math.random() * 40));
+  }
+}
+
+/* =========================================================
+   Quadro
+   ========================================================= */
+const LAYOUTS = {
+  full: [
+    { key: "j",      label: "Jor.",  w: 2,  align: "right" },
+    { key: "date",   label: "Data",  w: 10 },
+    { key: "time",   label: "Hora",  w: 5 },
+    { key: "game",   label: "Jogo",  w: 22 },
+    { key: "price",  label: "Desde", w: 4,  align: "right" },
+    { key: "status", label: "Estado", w: 8 },
+  ],
+  compact: [
+    { key: "dateS",  label: "Data",  w: 6 },
+    { key: "gameS",  label: "Jogo",  w: 9 },
+    { key: "status", label: "Estado", w: 8 },
+  ],
+};
+
+function fieldValue(g, key) {
+  const d = parseDate(g);
+  switch (key) {
+    case "j":      return String(g.j);
+    case "date":   return `${WEEKDAYS[d.getDay()]} ${String(d.getDate()).padStart(2, "0")} ${MONTHS[d.getMonth()]}`;
+    case "dateS":  return `${String(d.getDate()).padStart(2, "0")} ${MONTHS[d.getMonth()]}`;
+    case "time":   return g.time;
+    case "game":   return g.home ? `SPORTING X ${g.opp}` : `${g.opp} X SPORTING`;
+    case "gameS":  return g.home ? `SCP X ${g.short}` : `${g.short} X SCP`;
+    case "price":  return g.seats === null ? "--" : `${g.base}€`;
+    case "status": return statusOf(g).key;
+  }
+}
+
+const rowsEl = document.getElementById("rows");
+const headsEl = document.getElementById("colheads");
+let mode = null, rowGroups = [], titleGroup, clockGroup, tickerGroup, selected = null;
+
+function cellSizeFor(layout, compact) {
+  const board = document.querySelector(".board");
+  const inner = board.clientWidth - (compact ? 16 + 8 : 36 + 12);   // padding do quadro + da linha
+  const cells = layout.reduce((s, c) => s + c.w, 0);
+  const gaps = layout.length - 1, gapRatio = compact ? .7 : .5, cellGap = compact ? 1 : 2;
+  const size = (inner - (cells - layout.length) * cellGap) / (cells + gaps * gapRatio);
+  return Math.max(10, Math.min(30, Math.floor(size)));
+}
+
+function build() {
+  const newMode = innerWidth < 760 ? "compact" : "full";
+  const layout = LAYOUTS[newMode];
+  document.documentElement.style.setProperty("--cell", cellSizeFor(layout, newMode === "compact") + "px");
+  if (newMode === mode) return;
+  mode = newMode;
+
+  const cols = layout.map(c => `calc(var(--cell) * ${c.w} + ${(c.w - 1) * (mode === "compact" ? 1 : 2)}px)`).join(" ");
+  document.documentElement.style.setProperty("--cols", cols);
+
+  headsEl.innerHTML = layout.map(c => `<div class="${c.align === "right" ? "r" : ""}">${c.label}</div>`).join("");
+  rowsEl.innerHTML = "";
+  rowGroups = GAMES.map((g, idx) => {
+    const row = document.createElement("button");
+    row.className = "row"; row.type = "button"; row.setAttribute("role", "listitem");
+    row.addEventListener("click", () => openPanel(idx));
+    const groups = {};
+    layout.forEach(c => {
+      const wrap = document.createElement("div");
+      wrap.className = "group" + (c.align === "right" ? " r" : "");
+      if (c.key === "j" || c.key === "time") wrap.classList.add("c-label");
+      row.appendChild(wrap);
+      groups[c.key] = new FlapGroup(wrap, c.w, c.align);
+    });
+    rowsEl.appendChild(row);
+    return { row, groups };
+  });
+
+  // título, relógio e faixa de mensagens
+  const titleW = mode === "full" ? 14 : 9;
+  document.getElementById("titleFlap").innerHTML = "";
+  titleGroup = new FlapGroup(document.getElementById("titleFlap"), titleW);
+  titleGroup.set(mode === "full" ? "PROXIMOS JOGOS" : "JOGOS SCP");
+
+  document.getElementById("clockFlap").innerHTML = "";
+  clockGroup = new FlapGroup(document.getElementById("clockFlap"), 5);
+  clockGroup.set(clockText());
+
+  const tickerW = layout.reduce((s, c) => s + c.w, 0) + layout.length - 1;
+  document.getElementById("tickerFlap").innerHTML = "";
+  tickerGroup = new FlapGroup(document.getElementById("tickerFlap"), Math.min(tickerW, 46));
+  tickerGroup.set(MESSAGES[msgIdx % MESSAGES.length]);
+
+  GAMES.forEach((g, i) => setTimeout(() => renderRow(i), i * 140));
+}
+
+function renderRow(i) {
+  const g = GAMES[i], { row, groups } = rowGroups[i];
+  const st = statusOf(g);
+  Object.entries(groups).forEach(([k, grp]) => grp.set(fieldValue(g, k)));
+  const sg = groups.status.el;
+  sg.classList.remove("c-green", "c-amber", "c-red", "c-grey");
+  sg.classList.add(st.cls);
+  const sellable = st.key === "A VENDA" || st.key === "ULTIMOS";
+  row.classList.toggle("disabled", !sellable);
+  row.classList.toggle("selected", selected === i);
+  const d = parseDate(g);
+  row.setAttribute("aria-label",
+    `Jornada ${g.j}, ${WEEKDAYS_LONG[d.getDay()]} ${d.getDate()} de ${MONTHS_LONG[d.getMonth()]}, ${g.time}. ` +
+    `${g.home ? "Sporting contra " + g.oppName : g.oppName + " contra Sporting"}. ` +
+    ({ "A VENDA": "À venda", "ULTIMOS": "Últimos lugares", "ESGOTADO": "Esgotado", "BREVE": "Venda em breve" })[st.key]);
+}
+
+/* Relógio */
+function clockText() {
+  const n = new Date();
+  return `${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
+}
+setInterval(() => clockGroup && clockGroup.set(clockText(), 0), 5000);
+
+/* Faixa de mensagens */
+const MESSAGES = [
+  "BILHETEIRA DO LEAO",
+  "SOCIOS COM 25% DESCONTO",
+  "PORTAS ABREM 90 MIN ANTES",
+  "BILHETE DIGITAL NA APP",
+  "ONDE VAI UM VAO TODOS",
+];
+let msgIdx = 0;
+setInterval(() => { msgIdx++; tickerGroup && tickerGroup.set(MESSAGES[msgIdx % MESSAGES.length], 18); }, 9000);
+
+/* Simulação de vendas: a disponibilidade muda e o quadro “bate” */
+const t0 = Date.now();
+setInterval(() => {
+  GAMES.forEach((g, i) => {
+    if (g.seats === null && g.opensIn && Date.now() - t0 > g.opensIn) {
+      g.seats = g.opensWith; delete g.opensIn; renderRow(i); return;
+    }
+    if (g.seats > 0 && Math.random() < .35) {
+      const before = statusOf(g).key;
+      g.seats = Math.max(0, g.seats - Math.floor(Math.random() * (g.seats > 3000 ? 900 : 180)));
+      if (statusOf(g).key !== before) { renderRow(i); if (selected === i) renderPanel(); }
+    }
+  });
+}, 4000);
+
+addEventListener("resize", () => { clearTimeout(build._t); build._t = setTimeout(build, 150); });
+
+/* =========================================================
+   Painel de compra
+   ========================================================= */
+const panel = document.getElementById("panel"), scrim = document.getElementById("scrim"), body = document.getElementById("panelBody");
+let order = null, lastFocus = null;
+
+function sectorsFor(g) {
+  if (!g.home) return [{ id: "vis", name: "Bancada Visitante", note: "Setor reservado a adeptos do Sporting", price: g.base }];
+  return [
+    { id: "cen", name: "Bancada Central",  note: "Vista lateral · coberta",     price: Math.round(g.base * 2.2) },
+    { id: "lat", name: "Bancada Lateral",  note: "Vista lateral · pisos 1 e 3", price: Math.round(g.base * 1.5) },
+    { id: "tn",  name: "Topo Norte",       note: "Atrás da baliza · Juve Leo",  price: g.base },
+    { id: "ts",  name: "Topo Sul",         note: "Atrás da baliza",             price: g.base },
+  ];
+}
+
+function openPanel(i) {
+  const st = statusOf(GAMES[i]).key;
+  if (st !== "A VENDA" && st !== "ULTIMOS") return;
+  lastFocus = document.activeElement;
+  selected = i;
+  order = { sector: sectorsFor(GAMES[i])[0].id, qty: 1, socio: false, done: false };
+  rowGroups.forEach((r, k) => r.row.classList.toggle("selected", k === i));
+  renderPanel();
+  panel.classList.add("open"); scrim.classList.add("open");
+  panel.setAttribute("aria-hidden", "false");
+  document.getElementById("closeBtn").focus();
+}
+function closePanel() {
+  panel.classList.remove("open"); scrim.classList.remove("open");
+  panel.setAttribute("aria-hidden", "true");
+  selected = null;
+  rowGroups.forEach(r => r.row.classList.remove("selected"));
+  if (lastFocus) lastFocus.focus();
+}
+scrim.addEventListener("click", closePanel);
+document.getElementById("closeBtn").addEventListener("click", closePanel);
+addEventListener("keydown", e => { if (e.key === "Escape" && panel.classList.contains("open")) closePanel(); });
+
+function priceOf(g) {
+  const s = sectorsFor(g).find(s => s.id === order.sector);
+  const unit = order.socio ? Math.round(s.price * .75) : s.price;
+  return { s, unit, total: unit * order.qty };
+}
+
+function renderPanel() {
+  const g = GAMES[selected], d = parseDate(g), st = statusOf(g);
+  const title = g.home ? `Sporting <span style="color:var(--muted)">vs</span> ${g.oppName}` : `${g.oppName} <span style="color:var(--muted)">vs</span> Sporting`;
+  const when = `${WEEKDAYS_LONG[d.getDay()]}, ${d.getDate()} de ${MONTHS_LONG[d.getMonth()]} · ${g.time}`;
+
+  if (order.done) return renderTicket(g, when);
+
+  const soldOut = st.key === "ESGOTADO";
+  const { total } = priceOf(g);
+  body.innerHTML = `
+    <div class="eyebrow">Liga Portugal · Jornada ${g.j}</div>
+    <h2 id="pTitle">${title}</h2>
+    <div class="meta">${when}<br>${g.stadium}${st.key === "ULTIMOS" ? `<br><span style="color:var(--amber)">● Últimos lugares disponíveis</span>` : ""}${soldOut ? `<br><span style="color:var(--red)">● Esgotou enquanto escolhia</span>` : ""}</div>
+
+    <div class="section-title">Bancada</div>
+    <div class="sectors">
+      ${sectorsFor(g).map(s => `
+        <label class="sector ${soldOut ? "soldout" : ""}">
+          <span style="display:flex;align-items:center">
+            <input type="radio" name="sector" value="${s.id}" ${s.id === order.sector ? "checked" : ""} ${soldOut ? "disabled" : ""}>
+            <span>${s.name}<small>${s.note}</small></span>
+          </span>
+          <span class="price">${order.socio ? Math.round(s.price * .75) : s.price}€</span>
+        </label>`).join("")}
+    </div>
+
+    <div class="section-title">Quantidade</div>
+    <div class="qty">
+      <button type="button" id="minus" aria-label="Menos um bilhete">−</button>
+      <output id="qty" aria-live="polite">${order.qty}</output>
+      <button type="button" id="plus" aria-label="Mais um bilhete">+</button>
+      <span style="color:var(--muted);font-size:13px">máx. 4 por compra</span>
+    </div>
+    <label class="socio"><input type="checkbox" id="socio" ${order.socio ? "checked" : ""}> Sou sócio (−25%)</label>
+
+    <div class="total"><span style="color:var(--muted)">Total</span><strong>${total}€</strong></div>
+    <button class="buy" id="buy" ${soldOut ? "disabled" : ""}>${soldOut ? "Esgotado" : "Comprar bilhetes"}</button>
+  `;
+  body.querySelectorAll('input[name="sector"]').forEach(r => r.addEventListener("change", e => { order.sector = e.target.value; renderPanel(); }));
+  body.querySelector("#minus").onclick = () => { order.qty = Math.max(1, order.qty - 1); renderPanel(); };
+  body.querySelector("#plus").onclick  = () => { order.qty = Math.min(4, order.qty + 1); renderPanel(); };
+  body.querySelector("#socio").onchange = e => { order.socio = e.target.checked; renderPanel(); };
+  body.querySelector("#buy").onclick = () => {
+    g.seats = Math.max(0, g.seats - order.qty);
+    order.done = true; order.code = makeCode();
+    renderRow(selected); renderPanel();
+  };
+}
+
+function makeCode() {
+  const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return "SCP-" + Array.from({ length: 5 }, () => A[Math.floor(Math.random() * A.length)]).join("");
+}
+
+function renderTicket(g, when) {
+  const { s, unit, total } = priceOf(g);
+  body.innerHTML = `
+    <div class="eyebrow">Compra confirmada</div>
+    <h2 id="pTitle">Bom jogo, leão!</h2>
+    <div class="meta">Os bilhetes foram enviados para a app. Mostre o código à entrada.</div>
+    <div class="ticket">
+      <div class="tband"><span>Jornada ${g.j}</span><span>Liga Portugal</span></div>
+      <div class="tbody">
+        <div class="wide"><small>Jogo</small><b>${g.home ? "Sporting vs " + g.oppName : g.oppName + " vs Sporting"}</b></div>
+        <div><small>Data</small><b>${when.split(" · ")[0]}</b></div>
+        <div><small>Hora</small><b>${g.time}</b></div>
+        <div class="wide"><small>Local</small><b>${g.stadium}</b></div>
+        <div><small>Bancada</small><b>${s.name}</b></div>
+        <div><small>Bilhetes</small><b>${order.qty} × ${unit}€ = ${total}€</b></div>
+      </div>
+      <div class="tear"></div>
+      <div class="tcode">
+        <div class="group" id="codeFlap" aria-label="Código ${order.code}"></div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+    </div>
+    <button class="buy again" id="again">Voltar ao quadro</button>
+  `;
+  const grp = new FlapGroup(body.querySelector("#codeFlap"), order.code.length);
+  setTimeout(() => grp.set(order.code, 60), 200);
+  body.querySelector("#again").onclick = closePanel;
+}
+
+/* Som */
+document.getElementById("soundBtn").addEventListener("click", e => {
+  const on = e.currentTarget.getAttribute("aria-pressed") !== "true";
+  e.currentTarget.setAttribute("aria-pressed", String(on));
+  Sound.enable(on);
+});
+
+build();
+</script>
+</body>
+</html>
